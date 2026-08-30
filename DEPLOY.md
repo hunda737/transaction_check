@@ -49,25 +49,25 @@ With no keys set the service fails closed and returns `503` to everything.
 
 ## 4. systemd
 
-Generate the unit with your username filled in:
+The installer detects your checkout path, your user, and your primary group, so
+it works wherever you cloned:
 
 ```bash
-sed "s/YOUR_USER/$USER/g" ~/transaction_check/deploy/ethiobank-receipts.service \
-  | sudo tee /etc/systemd/system/ethiobank-receipts.service >/dev/null
-
-sudo systemctl daemon-reload
-sudo systemctl enable --now ethiobank-receipts
-systemctl status ethiobank-receipts
+./deploy/install-service.sh
 ```
+
+Override the port with `PORT=9000 ./deploy/install-service.sh`. It refuses to
+install if the venv or `.env` is missing, rather than leaving you with a service
+that returns 503 to everything.
 
 Logs: `journalctl -u ethiobank-receipts -f`
 
 > The unit sets `ProtectHome=false` on purpose. The other hardening flags stay
 > on, but `ProtectHome=true` would hide `/home` from the service and it could
-> not start from your home directory.
+> not start from a home directory.
 
-If you cloned somewhere other than `~/transaction_check`, edit
-`WorkingDirectory`, `EnvironmentFile` and `ExecStart` to match.
+`deploy/ethiobank-receipts.service` is the template it renders; edit that only if
+you need options the script doesn't set.
 
 ## 5. Verify before exposing it
 
