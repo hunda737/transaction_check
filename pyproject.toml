@@ -1,5 +1,5 @@
 [build-system]
-requires = ["setuptools>=61.0"]
+requires = ["setuptools>=77.0"]
 build-backend = "setuptools.build_meta"
 
 [project]
@@ -7,7 +7,7 @@ name = "ethiobank-receipts"
 version = "0.2.0"
 description = "Optimized receipt extraction for Ethiopian banks using connection pooling"
 readme = "README.md"
-license = { text = "MIT" }
+license = "MIT"
 requires-python = ">=3.8"
 dependencies = [
     "requests",
@@ -31,3 +31,7 @@ api = ["fastapi", "uvicorn[standard]", "pydantic>=2"]
 
 [project.scripts]
 ethiobank-receipts = "ethiobank_receipts.cli:main"
+
+[tool.setuptools.packages.find]
+include = ["ethiobank_receipts*"]
+namespaces = false
