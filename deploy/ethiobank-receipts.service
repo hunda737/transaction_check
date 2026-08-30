@@ -1,0 +1,41 @@
+# /etc/systemd/system/ethiobank-receipts.service
+#
+# Runs as your existing login user. Replace YOUR_USER and the paths below, or
+# generate this file with the sed one-liner in DEPLOY.md.
+[Unit]
+Description=Ethiopian Bank Receipt Service
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=exec
+User=YOUR_USER
+Group=YOUR_USER
+WorkingDirectory=/home/YOUR_USER/transaction_check
+
+# API keys live here, NOT in the repo. chmod 600.
+EnvironmentFile=/home/YOUR_USER/transaction_check/.env
+
+# Bind to localhost only; nginx terminates TLS and proxies in.
+ExecStart=/home/YOUR_USER/transaction_check/.venv/bin/uvicorn ethiobank_receipts.api:app \
+    --host 127.0.0.1 --port 8060 --workers 4 --proxy-headers \
+    --forwarded-allow-ips 127.0.0.1
+
+Restart=always
+RestartSec=5
+
+# Bank pages can stall; give in-flight requests time to finish on restart.
+TimeoutStopSec=45
+
+# Hardening. NOTE: ProtectHome must stay false -- the code lives under /home,
+# and ProtectHome=true would hide it from the service and fail to start.
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=false
+ProtectKernelTunables=true
+ProtectControlGroups=true
+RestrictSUIDSGID=true
+
+[Install]
+WantedBy=multi-user.target

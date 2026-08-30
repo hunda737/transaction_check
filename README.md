@@ -48,18 +48,18 @@ pip install -e ".[api]"     # library + HTTP service
 ```powershell
 .\.venv\Scripts\Activate.ps1                  # puts uvicorn on PATH
 $env:ETHIOBANK_API_KEYS = "your-key-here"     # comma-separated for multiple keys
-uvicorn ethiobank_receipts.api:app --port 8000
+uvicorn ethiobank_receipts.api:app --port 8060
 ```
 
 Without activating, call the venv's executable directly:
-`.\.venv\Scripts\uvicorn.exe ethiobank_receipts.api:app --port 8000`
+`.\.venv\Scripts\uvicorn.exe ethiobank_receipts.api:app --port 8060`
 
 **bash / Linux:**
 
 ```bash
 source .venv/bin/activate
 export ETHIOBANK_API_KEYS="your-key-here"
-uvicorn ethiobank_receipts.api:app --port 8000
+uvicorn ethiobank_receipts.api:app --port 8060
 ```
 
 Interactive docs at `/docs`. Every `/receipts` call needs an `X-API-Key` header; with
@@ -67,12 +67,12 @@ no keys configured the service fails closed (`503`).
 
 ```bash
 curl -H "X-API-Key: your-key-here" \
-  http://localhost:8000/receipts/tele/DHS48P7HGQ
+  http://localhost:8060/receipts/tele/DHS48P7HGQ
 ```
 
 > In PowerShell `curl` is an alias for `Invoke-WebRequest`, so use `curl.exe` for the
 > command above, or:
-> `Invoke-RestMethod "http://localhost:8000/receipts/tele/DHS48P7HGQ" -Headers @{ "X-API-Key" = "your-key-here" }`
+> `Invoke-RestMethod "http://localhost:8060/receipts/tele/DHS48P7HGQ" -Headers @{ "X-API-Key" = "your-key-here" }`
 
 ```json
 {
