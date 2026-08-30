@@ -1,0 +1,33 @@
+{
+  "id": "FT26203953V8",
+  "transactionType": "ACNX",
+  "debitAccountNo": "1********1522",
+  "debitCurrency": "ETB",
+  "debitAmount": "10500.00",
+  "creditAccountNo": "1********5801",
+  "creditCurrency": "ETB",
+  "paymentDetails": ["MB Transfer"],
+  "commissionTypes": [
+    {"commissionType": "COMFTMB", "commissionAmt": "ETB3.00"},
+    {"commissionType": "DISASRECOV", "commissionAmt": "ETB0.15"}
+  ],
+  "taxTypes": [{"taxType": "15", "taxAmt": "ETB0.45"}],
+  "amountDebitedWithCurrency": "ETB10503.60",
+  "amountCreditedWithCurrency": "ETB10500.00",
+  "amountDebited": "10503.60",
+  "amountCredited": "10500.00",
+  "totalChargeAmount": "3.60",
+  "totalTaxAmount": "0.45",
+  "dateTimes": ["2026-07-22T06:31:00Z"],
+  "creditAccountHolder": "TEST CBE RECEIVER",
+  "debitAccountHolder": "TEST CBE PAYER",
+  "isPlatformTransaction": true,
+  "channel": "IOS",
+  "platformTransactionType": "A2A",
+  "isOtherBank": false,
+  "description": "MB Transfer",
+  "serviceChargeValue": "ETB 3.00",
+  "vatValue": "ETB 0.45",
+  "drCharge": "ETB 0.15",
+  "status": "COMPLETED"
+}
