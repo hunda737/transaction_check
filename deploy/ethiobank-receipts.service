@@ -15,6 +15,8 @@ WorkingDirectory=/home/YOUR_USER/transaction_check
 
 # API keys live here, NOT in the repo. chmod 600.
 EnvironmentFile=/home/YOUR_USER/transaction_check/.env
+# Job queue + receipt cache, shared with ethiobank-receipts-worker.service.
+Environment=ETHIOBANK_DB_PATH=/home/YOUR_USER/transaction_check/data/ethiobank.db
 
 # Bind to localhost only; nginx terminates TLS and proxies in.
 ExecStart=/home/YOUR_USER/transaction_check/.venv/bin/uvicorn ethiobank_receipts.api:app \
@@ -33,6 +35,8 @@ NoNewPrivileges=true
 PrivateTmp=true
 ProtectSystem=strict
 ProtectHome=false
+# ProtectSystem=strict makes everything read-only except this.
+ReadWritePaths=/home/YOUR_USER/transaction_check/data
 ProtectKernelTunables=true
 ProtectControlGroups=true
 RestrictSUIDSGID=true

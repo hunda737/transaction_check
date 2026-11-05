@@ -1,12 +1,9 @@
-import requests
 from bs4 import BeautifulSoup
 from typing import Dict
 
 from ethiobank_receipts.banks import resolve_url
-from ethiobank_receipts.download import DEFAULT_TIMEOUT
+from ethiobank_receipts.download import DEFAULT_TIMEOUT, get_with_retry
 from ethiobank_receipts.errors import ReceiptNotFound
-
-session = requests.Session()
 
 _KEYS_OF_INTEREST = [
     "Transaction Time", "Transaction Type", "Amount", "Charge", "VAT",
@@ -31,7 +28,7 @@ def parse_awash_html(html) -> Dict[str, str]:
 def extract_awash_receipt_data(url: str) -> Dict[str, str]:
     """Extract an Awash Bank receipt from a reference (or an Awash URL)."""
     resolved = resolve_url("awash", url)
-    response = session.get(resolved, timeout=DEFAULT_TIMEOUT)
+    response = get_with_retry(resolved, timeout=DEFAULT_TIMEOUT)
     response.raise_for_status()
 
     data = parse_awash_html(response.content)

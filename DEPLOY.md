@@ -41,11 +41,25 @@ cat > ~/transaction_check/.env <<'ENV'
 ETHIOBANK_API_KEYS=key-for-deposit-app,key-for-admin-portal
 ETHIOBANK_CONNECT_TIMEOUT=10
 ETHIOBANK_READ_TIMEOUT=30
+# Results of POST /verifications are POSTed here, signed with the secret.
+# Format: <api-key>|<callback-url>|<signing-secret>, several separated by ';'
+ETHIOBANK_WEBHOOKS=key-for-deposit-app|https://deposits.example.com/hooks/receipts|CHANGE-ME
 ENV
 chmod 600 ~/transaction_check/.env
 ```
 
 With no keys set the service fails closed and returns `503` to everything.
+
+Optional tuning (defaults shown):
+
+| Variable | Default | Meaning |
+|---|---|---|
+| `ETHIOBANK_RATE_TELE` | `4/40` | telebirr: burst of 4, then one lookup per 40s. telebirr allows ~5 per window and **hangs** (no 429) when exceeded |
+| `ETHIOBANK_RATE_<BANK>` | `10/5` | Same for `CBE`, `AWASH`, `ZEMEN`, `DASHEN`, `BOA` |
+| `ETHIOBANK_TELE_READ_TIMEOUT` | `10` | telebirr answers real lookups in ~3s |
+| `ETHIOBANK_TIMEOUT_PAUSE` | `0` | Seconds to pause a whole bank after a read timeout. Off: observed telebirr hangs are per reference |
+| `ETHIOBANK_REVIEW_DEADLINE` | `600` | Seconds of continuous bank failure (from the first attempt) before a job becomes `needs_review` |
+| `ETHIOBANK_LOG_LEVEL` | `INFO` | `WARNING` to log failures only |
 
 ## 4. systemd
 
@@ -60,7 +74,15 @@ Override the port with `PORT=9000 ./deploy/install-service.sh`. It refuses to
 install if the venv or `.env` is missing, rather than leaving you with a service
 that returns 503 to everything.
 
-Logs: `journalctl -u ethiobank-receipts -f`
+It installs **two** units:
+
+- `ethiobank-receipts` — the HTTP API (4 uvicorn workers).
+- `ethiobank-receipts-worker` — the only process that calls banks for
+  `POST /verifications`, rate-limited per bank. Run exactly **one**; never scale it.
+
+Both share the SQLite job queue and receipt cache in `data/ethiobank.db`.
+
+Logs: `journalctl -u ethiobank-receipts -u ethiobank-receipts-worker -f`
 
 > The unit sets `ProtectHome=false` on purpose. The other hardening flags stay
 > on, but `ProtectHome=true` would hide `/home` from the service and it could
@@ -115,15 +137,24 @@ the banks block it.
 cd ~/transaction_check
 git pull
 .venv/bin/pip install -e ".[api]"
-sudo systemctl restart ethiobank-receipts
+./deploy/install-service.sh   # once, to add the worker unit when upgrading from 0.2
+sudo systemctl restart ethiobank-receipts ethiobank-receipts-worker
 ```
 
 ## Running it by hand (development)
+
+Two terminals, same `ETHIOBANK_DB_PATH`:
 
 ```bash
 cd ~/transaction_check
 set -a && source .env && set +a
 .venv/bin/uvicorn ethiobank_receipts.api:app --port 8060
+```
+
+```bash
+cd ~/transaction_check
+set -a && source .env && set +a
+.venv/bin/python -m ethiobank_receipts.worker
 ```
 
 ## Optional: Bank of Abyssinia
@@ -148,3 +179,7 @@ per worker and is memory-hungry.
 | `uvicorn: not found` | Use the venv path: `.venv/bin/uvicorn` |
 | `status=exited` right after start | Check `journalctl -u ethiobank-receipts -n 50`; usually a wrong path in the unit |
 | `200 OK` but connection refused via nginx | nginx still points at 8000 — check `proxy_pass` |
+| Verifications stay `queued` forever | The worker isn't running: `systemctl status ethiobank-receipts-worker` |
+| `attempt to write a readonly database` | `data/` missing or not in `ReadWritePaths` — re-run `install-service.sh` |
+| Worker log shows `ReadTimeout` for one reference, `HTTP 200` for others | telebirr is stalling on that reference (seen after many repeat lookups). The job keeps retrying with backoff and becomes `needs_review` after 10 min |
+| Worker log shows `Pausing tele ... remaining` | telebirr reported its rate limit nearly used; the worker waits one interval and resumes |

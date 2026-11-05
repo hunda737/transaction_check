@@ -1,11 +1,19 @@
+import os
 from typing import Dict
 
 import requests
 from bs4 import BeautifulSoup
 
 from ethiobank_receipts.banks import resolve_url
-from ethiobank_receipts.download import session as http_session, DEFAULT_TIMEOUT
+from ethiobank_receipts.download import get_with_retry, DEFAULT_TIMEOUT
 from ethiobank_receipts.errors import BankUnavailable, ReceiptNotFound
+
+# telebirr answers real lookups in ~2-3s. When it is rate limiting it never
+# answers at all, so a long read timeout only delays the inevitable.
+TELE_TIMEOUT = (
+    DEFAULT_TIMEOUT[0],
+    float(os.environ.get("ETHIOBANK_TELE_READ_TIMEOUT", 10)),
+)
 
 # Labels are bilingual, e.g. "የከፋይ ስም/Payer Name". Match on the English half.
 _PAIR_LABELS = {
@@ -92,7 +100,7 @@ def extract_tele_receipt_data(url_or_id: str) -> Dict[str, str]:
     headers = {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64)"}
 
     try:
-        resp = http_session.get(url, headers=headers, timeout=DEFAULT_TIMEOUT)
+        resp = get_with_retry(url, headers=headers, timeout=TELE_TIMEOUT)
         resp.raise_for_status()
     except requests.HTTPError as exc:
         status = exc.response.status_code if exc.response is not None else None

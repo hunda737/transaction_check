@@ -1,14 +1,17 @@
 #!/usr/bin/env bash
-# Generates and installs the systemd unit with this checkout's real paths,
-# the invoking user, and their primary group. Run from anywhere:
+# Generates and installs the systemd units (API + bank worker) with this
+# checkout's real paths, the invoking user, and their primary group. Run from
+# anywhere:
 #   ./deploy/install-service.sh
 set -euo pipefail
 
 APP_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-RUN_USER="${SUDO_USER:-$USER}"
+RUN_USER="${SUDO_USER:-${USER:-$(id -un)}}"
 RUN_GROUP="$(id -gn "$RUN_USER")"
 PORT="${PORT:-8060}"
+DATA_DIR="$APP_DIR/data"
 UNIT=/etc/systemd/system/ethiobank-receipts.service
+WORKER_UNIT=/etc/systemd/system/ethiobank-receipts-worker.service
 
 if [ ! -x "$APP_DIR/.venv/bin/uvicorn" ]; then
     echo "ERROR: $APP_DIR/.venv/bin/uvicorn not found." >&2
@@ -22,10 +25,28 @@ if [ ! -f "$APP_DIR/.env" ]; then
     exit 1
 fi
 
-echo "Installing service:"
+# The job queue and receipt cache live here; it must be writable by the
+# service user and is the only writable path under ProtectSystem=strict.
+mkdir -p "$DATA_DIR"
+chown "$RUN_USER:$RUN_GROUP" "$DATA_DIR" 2>/dev/null || sudo chown "$RUN_USER:$RUN_GROUP" "$DATA_DIR"
+chmod 700 "$DATA_DIR"
+
+echo "Installing services:"
 echo "  user  : $RUN_USER:$RUN_GROUP"
 echo "  dir   : $APP_DIR"
+echo "  data  : $DATA_DIR"
 echo "  port  : $PORT"
+
+HARDENING="NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+# ProtectHome must stay false: the code lives under /home and ProtectHome=true
+# would hide it from the service.
+ProtectHome=false
+ReadWritePaths=$DATA_DIR
+ProtectKernelTunables=true
+ProtectControlGroups=true
+RestrictSUIDSGID=true"
 
 sudo tee "$UNIT" >/dev/null <<UNITEOF
 [Unit]
@@ -39,6 +60,7 @@ User=$RUN_USER
 Group=$RUN_GROUP
 WorkingDirectory=$APP_DIR
 EnvironmentFile=$APP_DIR/.env
+Environment=ETHIOBANK_DB_PATH=$DATA_DIR/ethiobank.db
 
 ExecStart=$APP_DIR/.venv/bin/uvicorn ethiobank_receipts.api:app \
     --host 127.0.0.1 --port $PORT --workers 4 --proxy-headers \
@@ -48,24 +70,43 @@ Restart=always
 RestartSec=5
 TimeoutStopSec=45
 
-# ProtectHome must stay false: the code lives under /home and ProtectHome=true
-# would hide it from the service.
-NoNewPrivileges=true
-PrivateTmp=true
-ProtectSystem=strict
-ProtectHome=false
-ProtectKernelTunables=true
-ProtectControlGroups=true
-RestrictSUIDSGID=true
+$HARDENING
+
+[Install]
+WantedBy=multi-user.target
+UNITEOF
+
+# Exactly one worker: the per-bank rate limiter lives in this process.
+sudo tee "$WORKER_UNIT" >/dev/null <<UNITEOF
+[Unit]
+Description=Ethiopian Bank Receipt Service (bank worker)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=exec
+User=$RUN_USER
+Group=$RUN_GROUP
+WorkingDirectory=$APP_DIR
+EnvironmentFile=$APP_DIR/.env
+Environment=ETHIOBANK_DB_PATH=$DATA_DIR/ethiobank.db
+
+ExecStart=$APP_DIR/.venv/bin/python -m ethiobank_receipts.worker
+
+Restart=always
+RestartSec=5
+TimeoutStopSec=60
+
+$HARDENING
 
 [Install]
 WantedBy=multi-user.target
 UNITEOF
 
 sudo systemctl daemon-reload
-sudo systemctl enable --now ethiobank-receipts
+sudo systemctl enable --now ethiobank-receipts ethiobank-receipts-worker
 sleep 2
-sudo systemctl status ethiobank-receipts --no-pager || true
+sudo systemctl status ethiobank-receipts ethiobank-receipts-worker --no-pager || true
 echo
 echo "Health check:"
 curl -s "http://127.0.0.1:$PORT/health" || echo "  (no response yet -- check: journalctl -u ethiobank-receipts -n 50)"
